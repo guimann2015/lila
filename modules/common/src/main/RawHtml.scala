@@ -177,15 +177,22 @@ object RawHtml:
         Html(s"""<img class="embed" src="$img" alt="$url"/>""")
       }
 
-  private val markdownLinkRegex = """\[([^]]++)\]\((https?://[^)]++)\)""".r
-  def justMarkdownLinks(escapedHtml: Html): Html = Html:
+  val markdownLinkRegex = """\[([^\]]+)\]\(([^\)]+)\)""".r
+  def justMarkdownLinks(escapedHtml: Html)(using netDomain: NetDomain): Html = Html(
     markdownLinkRegex.replaceAllIn(
       escapedHtml.value,
       m =>
-        val content = Matcher.quoteReplacement(m.group(1))
-        val href    = removeUrlTrackingParameters(m.group(2))
-        s"""<a rel="nofollow noopener noreferrer" href="$href">$content</a>"""
+        val text   = escapeHtmlRaw(m.group(1))
+        val rawUrl = removeUrlTrackingParameters(m.group(2))
+        val fullUrl = rawUrl match
+          case u if u.startsWith("/")      => s"https://${netDomain.value}$u"
+          case u if u.startsWith("http")   => u
+          case u if u.contains("://")      => u
+          case u if u.count(_ == '.') >= 1 => s"https://$u"
+          case _                           => s"https://${netDomain.value}/$rawUrl"
+        s"""<a rel="nofollow noopener noreferrer" href="$fullUrl">$text</a>"""
     )
+  )
 
   private val trackingParametersRegex =
     """(?i)(?:\?|&(?:amp;)?)(?:utm\\?_\w+|gclid|gclsrc|\\?_ga)=\w+""".r
